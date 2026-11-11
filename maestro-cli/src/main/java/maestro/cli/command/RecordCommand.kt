@@ -150,8 +150,11 @@ class RecordCommand : Callable<Int> {
 
                 val resultView = AnsiResultView()
                 val screenRecording = kotlin.io.path.createTempFile(suffix = ".mp4").toFile()
-                val exitCode = screenRecording.sink().use { out ->
-                    runBlocking { maestro.startScreenRecording(out) }.use {
+                val (exitCode, recordingStartedAt) = screenRecording.sink().use { out ->
+                    val recording = checkNotNull(runBlocking { maestro.startScreenRecording(out) }) {
+                        "Screen recording is already in progress on this device session"
+                    }
+                    recording.use {
                         TestRunner.runSingle(
                             maestro,
                             device,
@@ -161,10 +164,12 @@ class RecordCommand : Callable<Int> {
                             path,
                             deviceId = parent?.deviceId,
                         )
-                    }
+                    } to recording.startedAt
                 }
 
-                val frames = resultView.getFrames()
+                // Starting the recording takes seconds on some devices; timing frames from before then would put
+                // the last commands' updates after the video ends.
+                val frames = resultView.getFrames(startedAt = recordingStartedAt)
 
                 val localOutputFile = outputFile ?: path.resolve("maestro-recording.mp4").toFile()
                 val videoRenderer = if (local) LocalVideoRenderer(

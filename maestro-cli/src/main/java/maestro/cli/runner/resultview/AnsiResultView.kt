@@ -34,6 +34,7 @@ import maestro.orchestra.TapOnPointV2Command
 import maestro.utils.Insight
 import maestro.utils.chunkStringByWordCount
 import org.jline.jansi.Ansi
+import java.time.Instant
 
 class AnsiResultView(
     private val prompt: String? = null,
@@ -41,9 +42,8 @@ class AnsiResultView(
     private val useEmojis: Boolean = true,
 ) : ResultView {
 
-    private val startTimestamp = System.currentTimeMillis()
-
-    private val frames = mutableListOf<Frame>()
+    // Each screen with when it was shown, in epoch milliseconds.
+    private val frames = mutableListOf<Pair<Long, String>>()
 
     private var previousFrame: String? = null
 
@@ -58,8 +58,14 @@ class AnsiResultView(
         }
     }
 
-    fun getFrames(): List<Frame> {
-        return frames.toList()
+    /**
+     * The screens shown so far, timestamped relative to [startedAt]: when the screen recording they will be
+     * overlaid on began, which is later than this view was created.
+     */
+    fun getFrames(startedAt: Instant): List<Frame> {
+        return frames.map { (shownAtMs, content) ->
+            Frame((shownAtMs - startedAt.toEpochMilli()).coerceAtLeast(0), content)
+        }
     }
 
     private fun renderErrorState(state: UiState.Error) {
@@ -252,13 +258,8 @@ class AnsiResultView(
             }
         }
         print(frame)
-        frames.add(createFrame(frame))
+        frames.add(System.currentTimeMillis() to frame.encodeBase64())
         previousFrame = frame
-    }
-
-    private fun createFrame(frame: String): Frame {
-        val content = frame.encodeBase64()
-        return Frame(System.currentTimeMillis() - startTimestamp, content)
     }
 
     private fun status(status: CommandStatus): String {

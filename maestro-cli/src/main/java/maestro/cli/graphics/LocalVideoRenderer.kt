@@ -42,7 +42,7 @@ class LocalVideoRenderer(
         NIOUtils.writableFileChannel(outputFile.absolutePath).use { out ->
             AWTSequenceEncoder(out, Rational.R(outputFPS, 1)).use { encoder ->
                 useFrameGrab(screenRecording) { grab ->
-                    val outputDurationSeconds = grab.videoTrack.meta.totalDuration
+                    val outputDurationSeconds = outputDurationSeconds(grab.videoTrack.meta.totalDuration, textFrames)
                     val outputFrameCount = (outputDurationSeconds * outputFPS).toInt()
                     var curFrame: PictureWithMetadata = grab.nativeFrameWithMetadata!!
                     var nextFrame: PictureWithMetadata? = grab.nativeFrameWithMetadata
@@ -51,6 +51,7 @@ class LocalVideoRenderer(
 
                         // !! Due to smart cast limitation: https://youtrack.jetbrains.com/issue/KT-7186
                         @Suppress("UNNECESSARY_NOT_NULL_ASSERTION")
+                        // Past the end of the recording this keeps the last picture on screen.
                         while (nextFrame != null && nextFrame!!.timestamp <= currentTimestampSeconds) {
                             curFrame = nextFrame!!
                             nextFrame = grab.nativeFrameWithMetadata
@@ -70,6 +71,21 @@ class LocalVideoRenderer(
         System.err.println()
         System.err.println()
         System.err.println("Rendering complete! If you're sharing on Twitter be sure to tag us \uD83D\uDE04 @|bold @mobile__dev|@".render())
+    }
+
+    companion object {
+        // How long the final terminal screen stays visible when it comes after the recording ends.
+        private const val FINAL_SCREEN_HOLD_SECONDS = 2.0
+
+        /**
+         * Android's screenrecord writes a frame only when the screen changes, so its recording ends at the
+         * last change, not when it was stopped. Commands that finish after that, such as assertions on a
+         * screen that has settled, would never show as completed. Lengthen the video to show them.
+         */
+        internal fun outputDurationSeconds(recordingDurationSeconds: Double, textFrames: List<AnsiResultView.Frame>): Double {
+            val lastTextFrameSeconds = textFrames.maxOfOrNull { it.timestamp / 1000.0 } ?: return recordingDurationSeconds
+            return maxOf(recordingDurationSeconds, lastTextFrameSeconds + FINAL_SCREEN_HOLD_SECONDS)
+        }
     }
 
     private fun String.stripAnsiCodes(): String {

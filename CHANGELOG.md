@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- CLI: fix `maestro record` videos ending before the last commands show as completed in the terminal overlay [Github Issue](https://github.com/mobile-dev-inc/Maestro/issues/3657)
+
 ## 2.12.1
 
 - Core: fix `tapOn` and `openLink` sending the literal `appId` to the driver when it is interpolated using `${...}`, which slowed element taps on Android
